@@ -1,0 +1,137 @@
+/*
+
+Как я использую JS в GTM
+Весь код пока написан в ES3
+
+*/
+
+// сбор id товаров в корзине
+
+function(){
+	var arr = [];
+	if ({{Page Path}} === '/personal/cart/') {
+		$('table:first h3 a').each(function(){
+          s=$(this).attr('href').split('/').slice(-2)[0];
+          arr.push(s);
+        });
+	}
+	return arr.join(', ') || 'not set';
+}
+
+// возвращает список заказанных товаров 
+
+function(){
+	var items = 'not set';
+	if ({{Page URL}}.indexOf('ORDER_ID') > -1 ) {
+		var tablearray = [], delim = ": ";
+		$('table:first tbody tr:not(:last-child) td:nth-child(-n+2)').each(function(){
+			var s=$(this).text();
+			tablearray.push(s);
+		});
+		items = tablearray.map(function(entry, index){
+			if (index < tablearray.length - 1) {
+              entry += index % 2 == 1 ? '; ' : ': ';
+			}
+			return entry;
+		}).join('');
+	}
+	return items;
+}
+
+// временно отследить форму исключительно силами GTM
+// Custom HTML tag
+
+(function(){
+	window.addEventListener('beforeunload', function() {
+		function selectorMatches(el, selector) {
+			var p = Element.prototype;
+			var f = p.matches || p.webkitMatchesSelector || p.mozMatchesSelector || p.msMatchesSelector || function(s) {
+				return [].indexOf.call(document.querySelectorAll(s), this) !== -1;
+			};
+			return f.call(el, selector);
+		}
+
+		var checkEvent = function() {
+			var i = window.dataLayer.length - 1;
+			while (i > -1) {
+				if (!!window.dataLayer[i]['gtm.element'] && window.dataLayer[i]['gtm.element'].matches('button#index-get-started')) {
+					return true;
+				}
+				i--;
+			}
+		}
+		if (checkEvent()) {
+			window.dataLayer.push({
+				'event' : 'formSuccess',
+				'formId' : 'signUp-get-started-landing'
+			});
+		}
+	});
+})();
+
+
+// отслеживание активного времени на странице
+
+(function() {
+	var startEngage = new Date().getTime();
+	var timeEngaged = 0;
+	var idleTime = 0;
+	var idle = true;
+	var idleReport = false;
+	var idleTimer, reportTimer;
+
+	var setIdle = function() {
+	  idleTime = new Date().getTime();
+	  timeEngaged += idleTime - startEngage;
+	  idle = true;
+	};
+
+	var pulse = function(evt) {
+	  if (idle) {
+	    idle = false;
+	    startEngage = new Date().getTime();
+	    idleReport = false;
+	  }
+	  window.clearTimeout(idleTimer);
+	  idleTimer = window.setTimeout(setIdle, 5000); 
+	};    
+
+	var addListener = function(evt, cb) {
+	  if (window.addEventListener) {
+	    window.addEventListener(evt, cb);
+	  } else if (window.attachEvent) {
+	    window.attachEvent('on' + evt, cb);
+	  }
+	};
+
+	var report = function(evt) {
+	  if (!idle) {
+	    timeEngaged += new Date().getTime() - startEngage;
+	  }
+
+	  if (!idleReport && timeEngaged > 0 && timeEngaged < 3600000) { 
+	    window.dataLayer.push({
+		  'event' : 'nonIdle',
+	      'nonIdleTimeElapsed' : timeEngaged
+	    });
+	  }
+	  if (idle) {
+	    idleReport = true;
+	  }
+	  
+	  if (evt && evt.type === 'beforeunload') {
+	    window.removeEventListener('beforeunload', report);
+	  }
+	  timeEngaged = 0;
+	  startEngage = new Date().getTime();
+	  reportTimer = window.setTimeout(report, 15000);
+	};
+
+	addListener('mousedown', pulse);
+	addListener('keydown', pulse);
+	addListener('scroll', pulse);
+	addListener('mousemove', pulse);
+	addListener('beforeunload', report);
+	idleTimer = window.setTimeout(setIdle, 5000);
+	reportTimer = window.setTimeout(report, 15000);
+})();
